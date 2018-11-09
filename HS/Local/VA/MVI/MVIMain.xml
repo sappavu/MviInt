@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25">
+<Class name="HS.Local.VA.MVI.MVIMain">
+
+<Method name="MainMVI">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+    SET Addr="One Memorial Drive"
+    SET City="Cambridge"
+    SET State="MA"
+    SET Zip="02142"
+
+    SET MailMVI = $LISTBUILD(Addr,City,State,Zip)
+]]></Implementation>
+</Method>
+</Class>
+</Export>
