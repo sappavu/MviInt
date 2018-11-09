@@ -16,6 +16,7 @@
     SET City="Cambridge"
     SET State="MA"
     SET Zip="02142"
+	SET ountry="USA"
 
     SET Mail = $LISTBUILD(Addr,City,State,Zip)
 ]]></Implementation>
