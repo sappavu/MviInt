@@ -1,4 +1,4 @@
-Class ObjectScript.DataEntry1
+Class HS.Local.VA.MVI.DataEntry1
 {
 
 ClassMethod Main()
