@@ -1,0 +1,2575 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<Export generator="Cache" ts="2018-09-12 11:04:41" version="25">
+<Class name="HS.Local.VA.Terminology.CTTMap">
+<Super>%Persistent</Super>
+
+<Index name="IDKey">
+<IdKey>1</IdKey>
+<Properties>FromCodeSystemUpper,ToCodeSystemUpper,FromCodeUpper</Properties>
+<Unique>1</Unique>
+</Index>
+
+<Property name="FromCodeSystemUpper">
+<Type>%String</Type>
+<SqlComputeCode> Set {*}=$ZCVT({FromCodeSystem},"U")</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="FromCodeUpper">
+<Type>%String</Type>
+<SqlComputeCode> Set {*}=$ZCVT({FromCode},"U")</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="ToCodeSystemUpper">
+<Type>%String</Type>
+<SqlComputeCode> Set {*}=$ZCVT({ToCodeSystem},"U")</SqlComputeCode>
+<SqlComputed>1</SqlComputed>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="FromCodeSystem">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="FromCode">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="ToCodeSystem">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="220"/>
+</Property>
+
+<Property name="DateAdded">
+<Type>%Date</Type>
+</Property>
+
+<Method name="DeleteData">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>id:%String,concurrency:%Integer=-1</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Quit ..%DeleteId(id,concurrency)
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^HS.Local.VA.TerminoE2E3.CTTMapD</DataLocation>
+<DefaultData>CTTMapDefaultData</DefaultData>
+<IdLocation>^HS.Local.VA.TerminoE2E3.CTTMapD</IdLocation>
+<IndexLocation>^HS.Local.VA.TerminoE2E3.CTTMapI</IndexLocation>
+<StreamLocation>^HS.Local.VA.TerminoE2E3.CTTMapS</StreamLocation>
+<Data name="CTTMapDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>FromCodeSystem</Value>
+</Value>
+<Value name="3">
+<Value>FromCode</Value>
+</Value>
+<Value name="4">
+<Value>ToCodeSystem</Value>
+</Value>
+<Value name="5">
+<Value>DateAdded</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.CustomTranslationProfile">
+<Super>%RegisteredObject</Super>
+
+<Method name="Map">
+<Description>
+ClassMethd Map
+This method implements a hybrid terminology translation mechanism.  During initial deployment
+all translation will be performed using VETS/CTTDM.  As translations occur they will be automatically
+cached in HealthShare so that subsequent translations can be satisfied directly from HS tables.
+The cache can be maintained based upon a VA configurable number of days, default = 15</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pTable:%String,pFromCS:%String,pFromCode:%String,pFromDesc:%String,&pToCS:%String="",&pToCode:%String="",&pToDesc:%String=""]]></FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	// Check parameters
+	if pFromCode = "" quit 0
+	if pFromCS = "" quit 0
+	if pToCS = "" quit 0
+	set %Break=""
+	set tSC=1
+
+	;Check to see if translation can be done by HS
+	if $D(^HS.Registry.TranslationMapD($ZCVT(pFromCS,"U"),pToCS,$ZCVT(pFromCode,"U")),map) {
+		// Map exists in HS, handle internally
+		If pFromDesc'=""&&$D(^HS.Registry.TranslationMapD($ZCVT(pFromCS,"U"),pToCS,$ZCVT(pFromCode,"U"),"DescriptionExceptions",$ZCVT(pFromDesc,"U")),tExcept) {
+			Set pToCode=$P(tExcept,"||"),pToDesc=$P(tExcept,"||",2)
+		} Else {
+			Set pToCode=$LI(map,5),pToDesc=$LI(map,6) Quit:pToCode="" tSC
+		}
+	}
+	else {
+		// Map doesnt exist in HealthShare, per Rick Ross
+		//// **** CTT/VETS **** ////
+		; cache VUIDS for re-use by this process
+		; When CTT/VETS has to be called, add translations to local HealthShare maps for future use
+		; Codes added to HS should be purged after 15 days using HS.Local.VA.Terminology.WebServices:DeleteOldTranslationMaps
+		;
+		// Get the service
+		set tWS = ##class(HS.Local.VA.Terminology.VETS.Client.stsPort).%New()
+		;
+		try {
+			;break:%Break["s"
+			// Get from code system VUID
+			;if '$d(%HSTranslateVUID("cs",pFromCS))
+			;{
+			;	set tCS = tWS.ListCodeSystems(pFromCS)
+			;	if tCS.TotalNumberOfRecords '= 1 set tSC=0 quit
+			;	set tFromCSVUID = tCS.CodeSystems.GetAt(1).VUID
+			;	set %HSTranslateVUID("cs",pFromCS)=tFromCSVUID
+			;}
+			;else {
+			;	set tFromCSVUID = %HSTranslateVUID("cs",pFromCS)
+			;}             
+			;
+			;break:%Break["t"
+			// Get to code system VUID
+			;if '$d(%HSTranslateVUID("cs",pToCS))
+			;{
+			;	set tCS = tWS.ListCodeSystems(pToCS)
+			;	if tCS.TotalNumberOfRecords '= 1 set tSC=0 quit
+			;	set tToCSVUID = tCS.CodeSystems.GetAt(1).VUID
+			;	set %HSTranslateVUID("cs",pToCS) = tToCSVUID
+			;}
+			;else {
+			;	set tToCSVUID = %HSTranslateVUID("cs",pToCS)
+			;}
+			;
+			;break:%Break["m"
+			// Locate map set VUID for from/to code systems
+			;if '$d(%HSTranslateVUID("ms",tFromCSVUID,tToCSVUID))
+			;{
+			;	set tMS = tWS.ListMapSets(,tFromCSVUID,,tToCSVUID)
+			;	set tMSCt = 0 kill tMSArry
+			;	while tMSCt < tMS.TotalNumberOfRecords {
+			;		set tMSCt = $i(tMSCt)
+			;		set tMSD = tMS.MapSetDetails.GetAt(tMSCt)
+			;		set tMSDEff = tMSD.EffectiveDate set:tMSDEff="" tMSDEff = "*"
+			;		set tMSDVUID = tMSD.VUID
+			;		if tMSDEff]"",tMSDVUID]"" set tMSArry(tMSDEff,tMSDVUID)="",tMSArry=$i(tMSArry)
+			;	}
+			;	if $g(tMSArry)<1 set tSC=0 quit
+			;	set tMSEff = $zp(tMSArry("")) if tMSEff="" set tSC=0 quit
+			;	set tMSVUID = $zp(tMSArry(tMSEff,"")) if tMSVUID="" set tSC=0 quit
+			;	set %HSTranslateVUID("ms",tFromCSVUID,tToCSVUID) = tMSVUID
+			;}
+			;else {
+			;	set tMSVUID = %HSTranslateVUID("ms",tFromCSVUID,tToCSVUID)
+			;}
+			break:%Break["l" 
+			; pToCS is now the map-set VUID to use for translation
+			set tMSVUID = pToCS
+			// Lookup actual tocode using found translation map            
+			set tSources = ##class(%ListOfDataTypes).%New()
+			do tSources.Insert(pFromCode)
+			set tME = tWS.ListMapEntriesFromSource(tMSVUID,"current",tSources)
+			; We only handle 1-1 mappings
+			if tME.TotalNumberOfRecords '= 1 set tSC=0 quit
+			set tMEV1 = tME.MapEntryValues.GetAt(1)
+			; grab the target code/description
+			set pToCode = tMEV1.TargetValue
+			set pToDesc = tMEV1.TargetDesignationName
+			; if target description is null use the source description
+			set:pToDesc="" pToDesc = pFromDesc
+			; If CTT/VETS returns a target code, add to HS translation tables
+			if pToCode {
+				set tSC=..SaveTranslationMap("",pFromCS,pToCS,pFromCode,pToCode,pToDesc)
+			}
+		}
+		catch (e)
+		{
+			set tSC=e
+		}
+	}
+	quit tSC
+]]></Implementation>
+</Method>
+
+<Method name="SaveTranslationMap">
+<Description>
+Save Translation Map</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pId,pFromSystem,pToSystem,pFromCode,pToCode,pToDesc</FormalSpec>
+<ReturnType>%String</ReturnType>
+<ZenMethod>1</ZenMethod>
+<Implementation><![CDATA[
+	Set $zt="Error"
+	
+	Set tMap = ##class(HS.Hub.HSWS.WebServices.Containers.TranslationMap).%New()
+	Set tMap.ID=pId
+	Set tMap.FromCodeSystem = pFromSystem
+	Set tMap.ToCodeSystem = pToSystem
+	Set tMap.FromCode = pFromCode
+	Set tMap.ToCode = pToCode
+	Set tMap.ToDescription = pToDesc
+	Set tSC=##class(HS.Util.HubServices).InvokeHubService("HS.Local.VA.Terminology.WebServices","HS.Local.VA.Terminology.WebServicesSoap","AddEditTranslationMap",.tObj,tMap)
+	quit tObj
+Error Set $ZT=""
+	Do BACK^%ETN
+	Quit $ZE
+]]></Implementation>
+</Method>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.stsPort">
+<Super>%SOAP.WebClient</Super>
+
+<Method name="CheckConceptToConceptDomainAssociation">
+<Final>1</Final>
+<FormalSpec>CodeSystemVersionName:%String,ConceptCode:%String,DomainVUID:%Integer</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%Boolean</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("CheckConceptToConceptDomainAssociation").Invoke($this,"checkConceptToConceptDomainAssociation",.CodeSystemVersionName,.ConceptCode,.DomainVUID)
+]]></Implementation>
+</Method>
+
+<Method name="CheckDesignationValueSetMembership">
+<Final>1</Final>
+<FormalSpec>CodeSystemVersionName:%String,DesignationVUID:%Integer,ValueSetVUID:%Integer</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%String</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("CheckDesignationValueSetMembership").Invoke($this,"checkDesignationValueSetMembership",.CodeSystemVersionName,.DesignationVUID,.ValueSetVUID)
+]]></Implementation>
+</Method>
+
+<Method name="CheckValueSetSubsumption">
+<Final>1</Final>
+<FormalSpec>FirstValueSetVUID:%String,SecondValueSetVUID:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%Boolean</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("CheckValueSetSubsumption").Invoke($this,"checkValueSetSubsumption",.FirstValueSetVUID,.SecondValueSetVUID)
+]]></Implementation>
+</Method>
+
+<Method name="ComputeSubsumptionConceptAssociation">
+<Final>1</Final>
+<FormalSpec>CodeSystemVUID:%Integer,VersionName:%String,ParentConceptCode:%String,ChildConceptCode:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%String</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ComputeSubsumptionConceptAssociation").Invoke($this,"computeSubsumptionRelationship",.CodeSystemVUID,.VersionName,.ParentConceptCode,.ChildConceptCode)
+]]></Implementation>
+</Method>
+
+<Method name="DetermineTransitiveConceptAssociation">
+<Final>1</Final>
+<FormalSpec>CodeSystemVUID:%Integer,VersionName:%String,SourceConceptCode:%String,TargetConceptCode:%String,AssociationTypeName:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>%ListOfDataTypes</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>ELEMENTTYPE="%String",XMLITEMNAME="Path",XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("DetermineTransitiveConceptAssociation").Invoke($this,"getTransitiveConceptRelationship",.CodeSystemVUID,.VersionName,.SourceConceptCode,.TargetConceptCode,.AssociationTypeName)
+]]></Implementation>
+</Method>
+
+<Method name="ListAssociationTypes">
+<Final>1</Final>
+<FormalSpec>AssociationTypeName:%String,VUID:%Integer,VersionName:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.relationshipTypeListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListAssociationTypes").Invoke($this,"getRelationshipTypes",.AssociationTypeName,.VUID,.VersionName,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListAssociations">
+<Final>1</Final>
+<FormalSpec>VUID:%Integer,VersionName:%String,SourceConceptCode:%String,TargetConceptCode:%String,AssociationTypeName:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.relationshipDetailListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListAssociations").Invoke($this,"getRelationships",.VUID,.VersionName,.SourceConceptCode,.TargetConceptCode,.AssociationTypeName,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListCodeSystemConcepts">
+<Final>1</Final>
+<FormalSpec>CodeSystemVUID:%Integer,VersionName:%String,DesignationName:%String,ConceptCode:%String,ConceptStatus:%Boolean,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.codeSystemConceptsTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListCodeSystemConcepts").Invoke($this,"getCodeSystemConcepts",.CodeSystemVUID,.VersionName,.DesignationName,.ConceptCode,.ConceptStatus,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListCodeSystems">
+<Final>1</Final>
+<FormalSpec>CodeSystemName:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.codeSystemsListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListCodeSystems").Invoke($this,"ListCodeSystems",.CodeSystemName,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListConceptDomainBindings">
+<Final>1</Final>
+<FormalSpec>DomainVUID:%Integer,PageNumber:%xsd.int,PageSize:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.domainListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListConceptDomainBindings").Invoke($this,"ListConceptDomainBindings",.DomainVUID,.PageNumber,.PageSize)
+]]></Implementation>
+</Method>
+
+<Method name="ListConceptDomains">
+<Final>1</Final>
+<FormalSpec>DomainName:%String,PageNumber:%xsd.int,PageSize:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.domainListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListConceptDomains").Invoke($this,"getDomains",.DomainName,.PageNumber,.PageSize)
+]]></Implementation>
+</Method>
+
+<Method name="ListMapEntries">
+<Final>1</Final>
+<FormalSpec>MapSetVUID:%Integer,MapSetVersionName:%String,SourceConceptCodes:%ListOfDataTypes(ELEMENTTYPE="%String",XMLITEMNAME="ConceptCode",XMLNAME="SourceConceptCodes"),TargetConceptCodes:%ListOfDataTypes(ELEMENTTYPE="%String",XMLITEMNAME="ConceptCode",XMLNAME="TargetConceptCodes"),SourceConceptPreferredDesgntnNm:%String(XMLNAME="SourceConceptPreferredDesignationName"),TargetConceptPreferredDesgntnNm:%String(XMLNAME="TargetConceptPreferredDesignationName"),MapEntryOrder:%xsd.int,MapEntryStatus:%Boolean,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.mapEntryDetailListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListMapEntries").Invoke($this,"ListMapEntries",.MapSetVUID,.MapSetVersionName,.SourceConceptCodes,.TargetConceptCodes,.SourceConceptPreferredDesgntnNm,.TargetConceptPreferredDesgntnNm,.MapEntryOrder,.MapEntryStatus,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListMapEntriesFromSource">
+<Final>1</Final>
+<FormalSpec>MapSetVUID:%Integer,MapSetVersionName:%String,Sources:%ListOfDataTypes(ELEMENTTYPE="%String",XMLITEMNAME="Source",XMLNAME="Sources"),SourceDesignationTypeName:%String,TargetDesignationTypeName:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.mapEntryValueListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListMapEntriesFromSource").Invoke($this,"ListMapEntriesFromSource",.MapSetVUID,.MapSetVersionName,.Sources,.SourceDesignationTypeName,.TargetDesignationTypeName,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListMapSets">
+<Final>1</Final>
+<FormalSpec>MapSetName:%String,SourceCodeSystemVUID:%Integer,SourceCodeSystemVersionName:%String,TargetCodeSystemVUID:%Integer,TargetCodeSystemVersionName:%String,MapSetStatus:%Boolean,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.mapSetDetailListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListMapSets").Invoke($this,"getMapSets",.MapSetName,.SourceCodeSystemVUID,.SourceCodeSystemVersionName,.TargetCodeSystemVUID,.TargetCodeSystemVersionName,.MapSetStatus,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListUsageContexts">
+<Final>1</Final>
+<FormalSpec>UsageContextName:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.usageContextListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListUsageContexts").Invoke($this,"getUsageContexts",.UsageContextName,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListValueSetContents">
+<Final>1</Final>
+<FormalSpec>VUID:%Integer,VersionName:%String,DesignationName:%String,MembershipStatus:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.valueSetContentsListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListValueSetContents").Invoke($this,"getValueSetContents",.VUID,.VersionName,.DesignationName,.MembershipStatus,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ListValueSets">
+<Final>1</Final>
+<FormalSpec>ValueSetName:%String,ValueSetStatus:%String,PageSize:%xsd.int,PageNumber:%xsd.int</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.valueSetListTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ListValueSets").Invoke($this,"getValueSets",.ValueSetName,.ValueSetStatus,.PageSize,.PageNumber)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnAssociationDetails">
+<Final>1</Final>
+<FormalSpec>AssociationId:%Integer</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.relationshipDetailTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnAssociationDetails").Invoke($this,"getRelationshipDetails",.AssociationId)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnAssociationTypeDetails">
+<Final>1</Final>
+<FormalSpec>AssociationTypeName:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.relationshipTypeTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnAssociationTypeDetails").Invoke($this,"getRelationshipTypeDetails",.AssociationTypeName)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnCodeSystemDetails">
+<Final>1</Final>
+<FormalSpec>CodeSystemVUID:%Integer,VersionName:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.codeSystemVersionTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnCodeSystemDetails").Invoke($this,"getCodeSystemDetail",.CodeSystemVUID,.VersionName)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnConceptDetails">
+<Final>1</Final>
+<FormalSpec>CodeSystemVUID:%Integer,VersionName:%String,Code:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.conceptDetailTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnConceptDetails").Invoke($this,"getConceptDetail",.CodeSystemVUID,.VersionName,.Code)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnConceptDomainDetails">
+<Final>1</Final>
+<FormalSpec>DomainVUID:%Integer</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.domainDetailTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnConceptDomainDetails").Invoke($this,"getConceptDomainDetails",.DomainVUID)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnUsageContextDetails">
+<Final>1</Final>
+<FormalSpec>UsageContextVUID:%Integer</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.usageContextDetailTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnUsageContextDetails").Invoke($this,"getUsageContextDetails",.UsageContextVUID)
+]]></Implementation>
+</Method>
+
+<Method name="ReturnValueSetDetails">
+<Final>1</Final>
+<FormalSpec>VUID:%Integer,VersionName:%String</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.VETS.Client.tns.valueSetDetailTransfer</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<ReturnTypeParams>XMLNAME="return"</ReturnTypeParams>
+<Implementation><![CDATA[
+ Quit ..WebMethod("ReturnValueSetDetails").Invoke($this,"getValueSetDetail",.VUID,.VersionName)
+]]></Implementation>
+</Method>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Description>
+Non-default elementFormQualified for types XML namespace.</Description>
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="LOCATION">
+<Description>
+This is the URL used to access the web service.</Description>
+<Default>http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Description>
+This is the namespace used by the Service</Description>
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="OUTPUTTYPEATTRIBUTE">
+<Description>
+Use xsi:type attribute for literal types.</Description>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="SECURITYIN">
+<Description>
+Determines handling of Security header.</Description>
+<Default>ALLOW</Default>
+</Parameter>
+
+<Parameter name="SERVICENAME">
+<Description>
+This is the name of the Service</Description>
+<Default>ctService</Default>
+</Parameter>
+
+<Parameter name="SOAPVERSION">
+<Description>
+This is the SOAP version supported by the service.</Description>
+<Default>1.1</Default>
+</Parameter>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.Exception">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<SqlTableName>_Exception</SqlTableName>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>Exception</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="message">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="message"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.SOAPException">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>SOAPException</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="message">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="message"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.codeSystemConceptTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>codeSystemConceptTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Code">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Code"/>
+</Property>
+
+<Property name="Status">
+<Type>%Boolean</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+
+<Property name="Designations">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.designationTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="Designation"/>
+<Parameter name="XMLNAME" value="Designations"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.codeSystemConceptsTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>codeSystemConceptsTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="Concept">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.codeSystemConceptTransfer</Type>
+<Collection>list</Collection>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="Concept"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.codeSystemTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>codeSystemTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="VersionNames">
+<Type>%String</Type>
+<Collection>list</Collection>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLITEMNAME" value="VersionName"/>
+<Parameter name="XMLNAME" value="VersionNames"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.codeSystemVersionTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>codeSystemVersionTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Description"/>
+</Property>
+
+<Property name="Copyright">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Copyright"/>
+</Property>
+
+<Property name="CopyrightURL">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="CopyrightURL"/>
+</Property>
+
+<Property name="PreferredDesignationTypeName">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="PreferredDesignationTypeName"/>
+</Property>
+
+<Property name="Version">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.versionTransfer</Type>
+<Parameter name="XMLNAME" value="Version"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.codeSystemsListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>codeSystemsListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="CodeSystems">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.codeSystemTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="CodeSystems"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.conceptDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>conceptDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="ConceptCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ConceptCode"/>
+</Property>
+
+<Property name="ConceptStatus">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ConceptStatus"/>
+</Property>
+
+<Property name="Designations">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.designationDetailTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="Designation"/>
+<Parameter name="XMLNAME" value="Designations"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+
+<Property name="Properties">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.propertyTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="Property"/>
+<Parameter name="XMLNAME" value="Properties"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+
+<Property name="Associations">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.relationshipTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="Association"/>
+<Parameter name="XMLNAME" value="Associations"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.designationDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>designationDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Code">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Code"/>
+</Property>
+
+<Property name="Type">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Type"/>
+</Property>
+
+<Property name="Status">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+
+<Property name="Properties">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.propertyTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="Property"/>
+<Parameter name="XMLNAME" value="Properties"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+
+<Property name="ValueSets">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.valueSetTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="ValueSet"/>
+<Parameter name="XMLNAME" value="ValueSets"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.designationTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>designationTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Code">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Code"/>
+</Property>
+
+<Property name="Type">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Type"/>
+</Property>
+
+<Property name="Status">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.domainDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>domainDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="DomainVAPreferredName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="DomainVAPreferredName"/>
+</Property>
+
+<Property name="DomainVuid">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="DomainVuid"/>
+</Property>
+
+<Property name="DomainStatus">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="DomainStatus"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.domainListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>domainListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="DomainList">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.domainTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="DomainList"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.domainTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>domainTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapEntryDetailListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapEntryDetailListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="MapEntryDetails">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.mapEntryDetailTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="MapEntryDetails"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapEntryDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapEntryDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="MapEntryVUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="MapEntryVUID"/>
+</Property>
+
+<Property name="SourceConceptCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceConceptCode"/>
+</Property>
+
+<Property name="SourceConceptPreferredDesignationCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceConceptPreferredDesignationCode"/>
+</Property>
+
+<Property name="SourceConceptPreferredDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceConceptPreferredDesignationName"/>
+</Property>
+
+<Property name="TargetConceptCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetConceptCode"/>
+</Property>
+
+<Property name="TargetConceptPreferredDesignationCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetConceptPreferredDesignationCode"/>
+</Property>
+
+<Property name="TargetConceptPreferredDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetConceptPreferredDesignationName"/>
+</Property>
+
+<Property name="MapEntryOrder">
+<Type>%xsd.int</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="MapEntryOrder"/>
+</Property>
+
+<Property name="MapEntryStatus">
+<Type>%Boolean</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="MapEntryStatus"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapEntryValueListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapEntryValueListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="MapEntryValues">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.mapEntryValueTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="MapEntryValues"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapEntryValueTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapEntryValueTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="SourceValue">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceValue"/>
+</Property>
+
+<Property name="SourceDesignationTypeName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceDesignationTypeName"/>
+</Property>
+
+<Property name="TargetValue">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetValue"/>
+</Property>
+
+<Property name="TargetDesignationTypeName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetDesignationTypeName"/>
+</Property>
+
+<Property name="TargetDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetDesignationName"/>
+</Property>
+
+<Property name="TargetCodeSystemVUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="TargetCodeSystemVUID"/>
+</Property>
+
+<Property name="TargetCodeSystemVersionName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetCodeSystemVersionName"/>
+</Property>
+
+<Property name="MapEntryOrder">
+<Type>%xsd.int</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="MapEntryOrder"/>
+</Property>
+
+<Property name="MapEntryStatus">
+<Type>%Boolean</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="MapEntryStatus"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapSetDetailListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapSetDetailListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="MapSetDetails">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.mapSetDetailTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="MapSetDetails"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.mapSetDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>mapSetDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="VersionName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="VersionName"/>
+</Property>
+
+<Property name="PreferredDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="PreferredDesignationName"/>
+</Property>
+
+<Property name="TextualDefinition">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TextualDefinition"/>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Description"/>
+</Property>
+
+<Property name="EffectiveDate">
+<Type>%TimeStamp</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="EffectiveDate"/>
+</Property>
+
+<Property name="Status">
+<Type>%Boolean</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+
+<Property name="NumberOfMapEntries">
+<Type>%xsd.int</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="NumberOfMapEntries"/>
+</Property>
+
+<Property name="SourceValueType">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceValueType"/>
+</Property>
+
+<Property name="SourceCodeSystemVUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="SourceCodeSystemVUID"/>
+</Property>
+
+<Property name="SourceCodeSystemPreferredDesignation">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceCodeSystemPreferredDesignation"/>
+</Property>
+
+<Property name="SourceCodeSystemVersionName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceCodeSystemVersionName"/>
+</Property>
+
+<Property name="TargetValueType">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetValueType"/>
+</Property>
+
+<Property name="TargetCodeSystemVUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="TargetCodeSystemVUID"/>
+</Property>
+
+<Property name="TargetCodeSystemPreferredDesignation">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetCodeSystemPreferredDesignation"/>
+</Property>
+
+<Property name="TargetCodeSystemVersionName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetCodeSystemVersionName"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.propertyTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>propertyTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Type">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Type"/>
+</Property>
+
+<Property name="status">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="status"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.relationshipDetailListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>relationshipDetailListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="Associations">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.relationshipDetailTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="Associations"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.relationshipDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>relationshipDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="AssociationId">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="AssociationId"/>
+</Property>
+
+<Property name="SourceConceptCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceConceptCode"/>
+</Property>
+
+<Property name="TargetConceptCode">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetConceptCode"/>
+</Property>
+
+<Property name="SourceDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="SourceDesignationName"/>
+</Property>
+
+<Property name="TargetDesignationName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="TargetDesignationName"/>
+</Property>
+
+<Property name="AssociationTypeName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="AssociationTypeName"/>
+</Property>
+
+<Property name="AssociationStatus">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="AssociationStatus"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.relationshipTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>relationshipTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Type">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Type"/>
+</Property>
+
+<Property name="Code">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Code"/>
+</Property>
+
+<Property name="Status">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.relationshipTypeListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>relationshipTypeListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="AssociationType">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.relationshipTypeTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="AssociationType"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.relationshipTypeTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>relationshipTypeTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.usageContextDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>usageContextDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="VUID">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="UsageContextDomains">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.usageContextTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLITEMNAME" value="UsageContextDomain"/>
+<Parameter name="XMLNAME" value="UsageContextDomains"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.usageContextListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>usageContextListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="UsageContextDetails">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.usageContextDetailTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="UsageContextDetails"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.usageContextTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>usageContextTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="VUID">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.valueSetContentsListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>valueSetContentsListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="ValueSetContents">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.valueSetContentsTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="ValueSetContents"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.valueSetContentsTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>valueSetContentsTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="VUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="VUID"/>
+</Property>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Status">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+
+<Property name="Type">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Type"/>
+</Property>
+
+<Property name="MembershipStatus">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="MembershipStatus"/>
+</Property>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.valueSetDetailTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>HS.Local.VA.Terminology.VETS.Client.tns.valueSetTransfer</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>valueSetDetailTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="codeSystemVUID">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="codeSystemVUID"/>
+</Property>
+
+<Property name="VersionName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="VersionName"/>
+</Property>
+
+<Property name="DesignationCount">
+<Type>%Integer</Type>
+<Required>1</Required>
+<Parameter name="XMLNAME" value="DesignationCount"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.valueSetListTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>valueSetListTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="TotalNumberOfRecords">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="TotalNumberOfRecords"/>
+</Property>
+
+<Property name="ValueSet">
+<Type>HS.Local.VA.Terminology.VETS.Client.tns.valueSetTransfer</Type>
+<Collection>list</Collection>
+<Parameter name="XMLNAME" value="ValueSet"/>
+<Parameter name="XMLPROJECTION" value="ELEMENT"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.valueSetTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>valueSetTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="ValueSetVUID">
+<Type>%Integer</Type>
+<Parameter name="XMLNAME" value="ValueSetVUID"/>
+</Property>
+
+<Property name="ValueSetName">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ValueSetName"/>
+</Property>
+
+<Property name="ValueSetStatus">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ValueSetStatus"/>
+</Property>
+
+<Property name="versionNames">
+<Type>%String</Type>
+<Collection>list</Collection>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLITEMNAME" value="versionName"/>
+<Parameter name="XMLNAME" value="versionNames"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.VETS.Client.tns.versionTransfer">
+<Description>
+Created from: http://islvsswls4.fo-slc.med.va.gov:7205/sts.webservice/ctService?xsd=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>0</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>urn:gov:va:med:sts:webservice:ct</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>versionTransfer</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="Name">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+
+<Property name="Description">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Description"/>
+</Property>
+
+<Property name="EffectiveDate">
+<Type>%TimeStamp</Type>
+<Parameter name="XMLNAME" value="EffectiveDate"/>
+</Property>
+
+<Property name="ReleaseDate">
+<Type>%TimeStamp</Type>
+<Parameter name="XMLNAME" value="ReleaseDate"/>
+</Property>
+
+<Property name="ImportDate">
+<Type>%TimeStamp</Type>
+<Parameter name="XMLNAME" value="ImportDate"/>
+</Property>
+
+<Property name="Source">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Source"/>
+</Property>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.WebServices">
+<Super>%SOAP.WebService</Super>
+
+<Parameter name="SERVICENAME">
+<Description>
+Name of the WebService.</Description>
+<Default>WebServices</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Description>
+TODO: change this to actual SOAP namespace.
+SOAP Namespace for the WebService</Description>
+<Default>http://tempuri.org</Default>
+</Parameter>
+
+<Parameter name="USECLASSNAMESPACES">
+<Description>
+Namespaces of referenced classes will be used in the WSDL.</Description>
+<Default>1</Default>
+</Parameter>
+
+<Method name="AddEditTranslationMap">
+<Description>
+TODO: add arguments and implementation.
+AddEditTranslationMap</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pMap:HS.Hub.HSWS.WebServices.Containers.TranslationMap</FormalSpec>
+<ReturnType>HS.Hub.HSWS.WebServices.Containers.TranslationMap</ReturnType>
+<WebMethod>1</WebMethod>
+<Implementation><![CDATA[
+	Set tSC=##class(HS.Util.HubServices).InvokeHubService("HS.Hub.HSWS.WebServices","HS.Hub.HSWS.WebServicesClient","AddEditTranslationMap",.tObj,pMap)
+	if tObj.Status=1 {
+		Set tCTTObj=##class(HS.Local.VA.Terminology.CTTMap).%OpenId(pMap.ID,4,.tSC)
+		If '$isObject(tCTTObj) {
+			Set tCTTObj=##class(HS.Local.VA.Terminology.CTTMap).%New()
+		}
+		Set tCTTObj.FromCodeSystem=pMap.FromCodeSystem
+		Set tCTTObj.ToCodeSystem=pMap.ToCodeSystem
+		Set tCTTObj.FromCode=pMap.FromCode
+		Set tCTTObj.DateAdded=+$h
+		Set tObj.Status=tCTTObj.%Save()
+	}
+	Quit tObj
+]]></Implementation>
+</Method>
+
+<Method name="DeleteOldTranslationMaps">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pDays:%Integer=15</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<WebMethod>1</WebMethod>
+<Implementation><![CDATA[
+	set tSC=1
+	set oldestDate = $h-pDays
+	&sql(declare dotm cursor for
+		 select ID into :tId from HS_Local_VA_Terminology.CTTMap where DateAdded < :oldestDate)
+	&sql(open dotm)
+	&sql(fetch dotm)
+	while (SQLCODE = 0)
+	{
+		BREAK
+		Set tSC = $zobjclassmethod("HS.Registry.TranslationMap","DeleteData",tId)
+		if 'tSC quit
+		set tSC = $zobjclassmethod("HS.Local.VA.Terminology.CTTMap","DeleteData",tId)
+		if 'tSC quit
+		&sql(fetch dotm)
+	}
+	quit tSC
+]]></Implementation>
+</Method>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.WebServicesSoap">
+<Super>%SOAP.WebClient</Super>
+
+<Parameter name="LOCATION">
+<Description>
+This is the URL used to access the web service.</Description>
+<Default>http://localhost:57772/csp/healthshare/hsregistry/HS.Local.VA.Terminology.WebServices.cls</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Description>
+This is the namespace used by the Service</Description>
+<Default>http://tempuri.org</Default>
+</Parameter>
+
+<Parameter name="OUTPUTTYPEATTRIBUTE">
+<Description>
+Use xsi:type attribute for literal types.</Description>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="SECURITYIN">
+<Description>
+Determines handling of Security header.</Description>
+<Default>ALLOW</Default>
+</Parameter>
+
+<Parameter name="SERVICENAME">
+<Description>
+This is the name of the Service</Description>
+<Default>WebServices</Default>
+</Parameter>
+
+<Parameter name="SOAPVERSION">
+<Description>
+This is the SOAP version supported by the service.</Description>
+<Default>1.1</Default>
+</Parameter>
+
+<Method name="AddEditTranslationMap">
+<Final>1</Final>
+<FormalSpec>pMap:HS.Local.VA.Terminology.s0.TranslationMap</FormalSpec>
+<ProcedureBlock>1</ProcedureBlock>
+<ReturnType>HS.Local.VA.Terminology.s0.TranslationMap</ReturnType>
+<WebMethod>1</WebMethod>
+<SoapBindingStyle>document</SoapBindingStyle>
+<SoapBodyUse>literal</SoapBodyUse>
+<Implementation><![CDATA[
+ Quit ..WebMethod("AddEditTranslationMap").Invoke($this,"http://tempuri.org/HS.Local.VA.Terminology.WebServices.AddEditTranslationMap",.pMap)
+]]></Implementation>
+</Method>
+</Class>
+
+<Class name="HS.Local.VA.Terminology.s0.TranslationMap">
+<Description>
+Created from: http://localhost:57772/csp/healthshare/hsregistry/HS.Local.VA.Terminology.WebServices.CLS?WSDL=1</Description>
+<Super>%RegisteredObject,%XML.Adaptor</Super>
+
+<Parameter name="ELEMENTQUALIFIED">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="NAMESPACE">
+<Default>http://tempuri.org</Default>
+</Parameter>
+
+<Parameter name="XMLNAME">
+<Default>TranslationMap</Default>
+</Parameter>
+
+<Parameter name="XMLSEQUENCE">
+<Default>1</Default>
+</Parameter>
+
+<Property name="FromCodeSystem">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="FromCodeSystem"/>
+</Property>
+
+<Property name="FromCode">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="FromCode"/>
+</Property>
+
+<Property name="ToCodeSystem">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ToCodeSystem"/>
+</Property>
+
+<Property name="ToCode">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ToCode"/>
+</Property>
+
+<Property name="ToDescription">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ToDescription"/>
+</Property>
+
+<Property name="DescriptionExceptions">
+<Type>%String</Type>
+<Collection>array</Collection>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLITEMNAME" value="DescriptionExceptionsItem"/>
+<Parameter name="XMLKEYNAME" value="DescriptionExceptionsKey"/>
+<Parameter name="XMLNAME" value="DescriptionExceptions"/>
+<Parameter name="XMLPROJECTION" value="COLLECTION"/>
+</Property>
+
+<Property name="Status">
+<Type>%xsd.base64Binary</Type>
+<Parameter name="XMLNAME" value="Status"/>
+</Property>
+
+<Property name="%User">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="_User"/>
+</Property>
+
+<Property name="%Roles">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="_Roles"/>
+</Property>
+
+<Property name="%Gateway">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="_Gateway"/>
+</Property>
+
+<Property name="ID">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="ID"/>
+</Property>
+
+<Property name="Name">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+<Parameter name="XMLNAME" value="Name"/>
+</Property>
+</Class>
+
+<Routine languagemode="0" name="ICD9SNOMEDLOAD" type="MAC">
+<![CDATA[	;;ISC/AVB - Load the ICD9 to SNOMED Mappings ;6/20/2018  12:01 PM
+ 	;;
+ 	;Per Alejandro Directive 001, this routine should not be modified.
+ 	;;
+ 	;Initialize the Terminal
+ 	S terminal=$IO
+ 	;
+ 	;Enable End of File $ZEOF
+ 	do $system.Process.SetZEOF(1)
+ 	;
+ 	;Define the SNOMED 1-to-1 file
+ 	S filename="c:\temp\ICD9CM_SNOMED_MAP_1TO1_201712.txt"
+ 	;
+ 	; Read the 1-to-1 file and populate
+ 	D READFILE
+ 	;
+ 	;Don't use this file KP 06/27/2018 Define the SNOMED 1-to-Many file
+ 	;S filename="c:\Users\abravo\Downloads\ICD9CM_SNOMED_MAP_1TOM_201712.txt"
+ 	;
+ 	; Read the 1-to-1 file and populate
+ 	;D READFILE
+ 	;
+ 	Q
+ 	;
+READFILE	
+ 	;
+ 	;Open the file Readonly
+ 	O filename:("R"):5
+ 	;
+ 	; Loop over the records
+ 	F I=1:1 { 
+ 		;
+ 		; Read the record
+		Q:($ZEOF=-1)
+ 		;
+ 		;U terminal W !,"I = ",I
+ 		;
+ 		U filename R X:1
+		;
+		Q:($ZEOF=-1)
+		;
+		; Instantiate your new object
+		S codeset=##class(ISC.Terminology.CodeMap).%New()
+		;
+		; Set the properties
+		S codeset.SourceCode=$P(X,$C(9),1)
+		S codeset.SourceSystem="ICD"
+		S codeset.TargetCode=$P(X,$C(9),8)
+		S codeset.TargetSystem="SCT"
+		;S codeset.ToDescription=$P(X,$C(9),9)
+		;
+		; Save the sucker
+		S sc=codeset.%Save()
+		;
+		;U terminal W !,X,"  sc = ",sc
+		;W !!,"From System Code = ",codeset.FromSystemCode
+		;W !,"From Code Set Type = ",codeset.FromCodeSetType
+		;W !,"To System Code = ",codeset.ToSystemCode
+		;W !,"To System Code Set Type = ",codeset.ToCodeSetType
+		;W !,"To Description = ",codeset.ToDescription
+		;
+ 	}
+ 	;
+ 	C filename
+ 	;
+ 	Q]]></Routine>
+
+<Routine languagemode="0" name="SNOMEDLOAD" type="INT">
+<![CDATA[	;;ISC/AVB - Load the SNOMED Codes ;6/15/2018  8:57 AM
+ 	;;
+ 	;Per Alejandro Directive 001, this routine should not be modified.
+ 	;;
+ 	;Initialize the Terminal
+ 	S terminal=$IO
+ 	;
+ 	;Enable End of File $ZEOF
+ 	do $system.Process.SetZEOF(1)
+ 	;
+ 	;Define the SNOMED file
+ 	S filename="c:\temp\sct2_Description_Full-en_US1000124_20180301.txt"
+ 	;
+ 	;Open the file Readonly
+ 	O filename:("R"):5
+ 	U filename R X:1
+ 	;
+ 	; Loop over the records
+ 	F I=1:1 { 
+ 		;
+ 		; Read the record
+		Q:($ZEOF=-1)
+ 		;
+ 		;U terminal W !,"I = ",I
+ 		;
+ 		U filename R X:1
+		;
+		Q:($ZEOF=-1)
+		;
+		; Instantiate your new object
+		S codeset=##class(ISC.Terminology.CodeSet).%New()
+		;
+		; Set the properties
+		S codeset.Code=$P(X,$C(9),1)
+		S codeset.Description=$P(X,$C(9),8)
+		S codeset.CodeType="SCT"
+		S codeset.Status=$P(X,$C(9),3)
+		S Y=$P(X,$C(9),2)
+		S codeset.EffectiveDate=$E(Y,1,4)_"-"_$E(Y,5,6)_"-"_$E(Y,7,8)
+		;
+		; Save the sucker
+		S sc=codeset.%Save()
+		BREAK:'sc
+		;
+		;U terminal W !,X
+		;W !!,"Code = ",codeset.Code
+		;W !,"Description = ",codeset.Description
+		;W !,"CodeType = ",codeset.CodeType
+		;W !,"Status = ",codeset.Status
+		;W !,"EffectiveDate = ",codeset.EffectiveDate
+		;
+ 	}
+ 	;
+ 	C filename
+ 	;
+ 	Q]]></Routine>
+</Export>
